@@ -18,6 +18,16 @@ public class EquipmentService {
     public List<Equipment> getAllEquipment() {
         return equipmentRepository.findAll();
     }
+    
+    // Alias for getAllEquipment
+    public List<Equipment> findAll() {
+        return getAllEquipment();
+    }
+    
+    // Find by category (search)
+    public List<Equipment> findByCategory(String category) {
+        return equipmentRepository.findByCategory(category);
+    }
 
     public Optional<Equipment> getEquipmentById(String equipmentId) {
         return equipmentRepository.findById(equipmentId);
@@ -46,6 +56,29 @@ public class EquipmentService {
         }
 
         Equipment equipment = new Equipment(equipmentId, name, category, quantity, available, condition);
+        equipmentRepository.save(equipment);
+    }
+    
+    // Overload to accept Equipment object
+    public void updateEquipment(Equipment equipment) {
+        if (equipment == null) {
+            throw new ValidationException("Equipment cannot be null");
+        }
+        updateEquipment(equipment.getEquipmentId(), equipment.getName(), equipment.getCategory(), 
+                       equipment.getQuantity(), equipment.getAvailable(), equipment.getCondition());
+    }
+    
+    // Add equipment using Equipment object
+    public void addEquipment(Equipment equipment) {
+        if (equipment == null) {
+            throw new ValidationException("Equipment cannot be null");
+        }
+        validateEquipment(equipment.getEquipmentId(), equipment.getName(), equipment.getCategory(), equipment.getQuantity());
+
+        if (equipmentRepository.findById(equipment.getEquipmentId()).isPresent()) {
+            throw new ValidationException("Equipment ID already exists: " + equipment.getEquipmentId());
+        }
+
         equipmentRepository.save(equipment);
     }
 

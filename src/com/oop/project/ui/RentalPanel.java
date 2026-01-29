@@ -2,7 +2,10 @@ package com.oop.project.ui;
 
 import com.oop.project.exception.ValidationException;
 import com.oop.project.model.ContractStatus;
+import com.oop.project.model.LessonPackage;
 import com.oop.project.model.RentalContract;
+import com.oop.project.service.InstructorService;
+import com.oop.project.service.LessonPackageService;
 import com.oop.project.service.RentalContractService;
 
 import javax.swing.*;
@@ -14,6 +17,8 @@ import java.util.List;
 
 public class RentalPanel extends JPanel {
     private final RentalContractService rentalService;
+    private final LessonPackageService lessonService;
+    private final InstructorService instructorService;
     private final JTable table;
     private final DefaultTableModel tableModel;
     private final JTextField contractNumberField = new JTextField(10);
@@ -21,7 +26,9 @@ public class RentalPanel extends JPanel {
     private final JTextField equipmentIdField = new JTextField(15);
     private final JTextField startTimeField = new JTextField(20);
     private final JSpinner durationSpinner = new JSpinner(new SpinnerNumberModel(60, 60, 7200, 30));
-    private final JTextField lessonPackageField = new JTextField(15);
+    private final JComboBox<String> lessonComboBox = new JComboBox<>();
+    private final JLabel instructorLabel = new JLabel("N/A");
+    private final JLabel lessonFeeLabel = new JLabel("$0.00");
     private final JLabel rentalFeeLabel = new JLabel("$0.00");
     private final JLabel totalFeeLabel = new JLabel("$0.00");
     private final JComboBox<ContractStatus> statusCombo = new JComboBox<>(ContractStatus.values());
@@ -29,11 +36,13 @@ public class RentalPanel extends JPanel {
 
     public RentalPanel(RentalContractService rentalService) {
         this.rentalService = rentalService;
+        this.lessonService = new LessonPackageService();
+        this.instructorService = new InstructorService();
         setLayout(new BorderLayout(10, 10));
         setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        // Table
-        String[] columns = {"Contract#", "Customer", "Equipment", "Start Time", "Duration", "Rental Fee", "Lesson Fee", "Total", "Status"};
+        // Table - Added Instructor column
+        String[] columns = {"Contract#", "Customer", "Equipment", "Start Time", "Duration", "Instructor", "Rental Fee", "Lesson Fee", "Total", "Status"};
         tableModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -58,6 +67,12 @@ public class RentalPanel extends JPanel {
 
         // Duration change listener for real-time pricing
         durationSpinner.addChangeListener(e -> updatePricing());
+        
+        // Lesson selection listener
+        lessonComboBox.addActionListener(e -> updateLessonInfo());
+        
+        // Load lesson packages
+        loadLessonPackages();
 
         refreshTable();
     }
@@ -89,7 +104,17 @@ public class RentalPanel extends JPanel {
         row++;
 
         addFormField(panel, gbc, row++, "Duration (min):", durationSpinner);
-        addFormField(panel, gbc, row++, "Lesson Package:", lessonPackageField);
+        
+        // Lesson Package Dropdown
+        gbc.gridx = 0; gbc.gridy = row;
+        panel.add(new JLabel("Lesson Package:"), gbc);
+        gbc.gridx = 1;
+        panel.add(lessonComboBox, gbc);
+        row++;
+        
+        // Instructor Name
+        addFormField(panel, gbc, row++, "Instructor:", instructorLabel);
+        addFormField(panel, gbc, row++, "Lesson Fee:", lessonFeeLabel);
         addFormField(panel, gbc, row++, "Rental Fee:", rentalFeeLabel);
         addFormField(panel, gbc, row++, "Total Fee:", totalFeeLabel);
         addFormField(panel, gbc, row++, "Status:", statusCombo);
@@ -142,7 +167,49 @@ public class RentalPanel extends JPanel {
         int duration = (Integer) durationSpinner.getValue();
         double rentalFee = rentalService.calculateRentalFee(duration);
         rentalFeeLabel.setText(String.format("$%.2f", rentalFee));
-        totalFeeLabel.setText(String.format("$%.2f", rentalFee));
+        
+        // Calculate total with lesson fee
+        double lessonFee = 0.0;
+        String selectedLesson = (String) lessonComboBox.getSelectedItem();
+        if (selectedLesson != null && !selectedLesson.equals("None")) {
+            String lessonId = selectedLesson.split(" - ")[0];
+            LessonPackage lesson = lessonService.getLessonById(lessonId);
+            if (lesson != null) {
+                lessonFee = lesson.getPrice();
+            }
+        }
+        
+        totalFeeLabel.setText(String.format("$%.2f", rentalFee + lessonFee));
+    }
+    
+    private void loadLessonPackages() {
+        lessonComboBox.removeAllItems();
+        lessonComboBox.addItem("None");
+        
+        List<LessonPackage> lessons = lessonService.getAllLessons();
+        for (LessonPackage lesson : lessons) {
+            lessonComboBox.addItem(lesson.getPackageId() + " - " + lesson.getName() + " ($" + lesson.getPrice() + ")");
+        }
+    }
+    
+    private void updateLessonInfo() {
+        String selectedLesson = (String) lessonComboBox.getSelectedItem();
+        
+        if (selectedLesson == null || selectedLesson.equals("None")) {
+            instructorLabel.setText("N/A");
+            lessonFeeLabel.setText("$0.00");
+        } else {
+            String lessonId = selectedLesson.split(" - ")[0];
+            LessonPackage lesson = lessonService.getLessonById(lessonId);
+            
+            if (lesson != null) {
+                String instructorName = instructorService.getInstructorNameByLessonId(lessonId);
+                instructorLabel.setText(instructorName);
+                lessonFeeLabel.setText(String.format("$%.2f", lesson.getPrice()));
+            }
+        }
+        
+        updatePricing();
     }
 
     private void createContract() {
@@ -150,13 +217,31 @@ public class RentalPanel extends JPanel {
             LocalDateTime startTime = LocalDateTime.parse(startTimeField.getText(), 
                 DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
             
+            int duration = (Integer) durationSpinner.getValue();
+            
+            // Get selected lesson package ID
+            String lessonPackageId = null;
+            String selectedLesson = (String) lessonComboBox.getSelectedItem();
+            if (selectedLesson != null && !selectedLesson.equals("None")) {
+                lessonPackageId = selectedLesson.split(" - ")[0];
+                
+                // Check for instructor schedule conflict
+                boolean hasConflict = instructorService.hasScheduleConflict(lessonPackageId, startTime, duration);
+                if (hasConflict) {
+                    String conflictMsg = instructorService.getConflictDetails(lessonPackageId, startTime, duration);
+                    JOptionPane.showMessageDialog(this, conflictMsg, 
+                        "Schedule Conflict", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+            }
+            
             rentalService.createContract(
                 contractNumberField.getText().trim().toUpperCase(),
                 customerIdField.getText().trim(),
                 equipmentIdField.getText().trim(),
                 startTime,
-                (Integer) durationSpinner.getValue(),
-                lessonPackageField.getText().trim().isEmpty() ? null : lessonPackageField.getText().trim()
+                duration,
+                lessonPackageId
             );
             JOptionPane.showMessageDialog(this, "Rental contract created successfully");
             clearForm();
@@ -241,12 +326,14 @@ public class RentalPanel extends JPanel {
         tableModel.setRowCount(0);
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
         for (RentalContract c : contracts) {
+            String instructorName = instructorService.getInstructorNameByLessonId(c.getLessonPackageId());
             tableModel.addRow(new Object[]{
                 c.getContractNumber(),
                 c.getCustomerId(),
                 c.getEquipmentId(),
                 c.getStartTime().format(formatter),
                 c.getDurationMinutes() + " min",
+                instructorName,
                 String.format("$%.2f", c.getRentalFee()),
                 String.format("$%.2f", c.getLessonFee()),
                 String.format("$%.2f", c.getTotalFee()),
@@ -270,8 +357,22 @@ public class RentalPanel extends JPanel {
         equipmentIdField.setText(contract.getEquipmentId());
         startTimeField.setText(contract.getStartTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
         durationSpinner.setValue(contract.getDurationMinutes());
-        lessonPackageField.setText(contract.getLessonPackageId() != null ? contract.getLessonPackageId() : "");
+        
+        // Set lesson package selection
+        if (contract.getLessonPackageId() != null && !contract.getLessonPackageId().isEmpty()) {
+            for (int i = 0; i < lessonComboBox.getItemCount(); i++) {
+                String item = lessonComboBox.getItemAt(i);
+                if (item.startsWith(contract.getLessonPackageId() + " - ")) {
+                    lessonComboBox.setSelectedIndex(i);
+                    break;
+                }
+            }
+        } else {
+            lessonComboBox.setSelectedItem("None");
+        }
+        
         rentalFeeLabel.setText(String.format("$%.2f", contract.getRentalFee()));
+        lessonFeeLabel.setText(String.format("$%.2f", contract.getLessonFee()));
         totalFeeLabel.setText(String.format("$%.2f", contract.getTotalFee()));
         statusCombo.setSelectedItem(contract.getStatus());
     }
@@ -282,7 +383,7 @@ public class RentalPanel extends JPanel {
         equipmentIdField.setText("");
         startTimeField.setText(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
         durationSpinner.setValue(60);
-        lessonPackageField.setText("");
+        lessonComboBox.setSelectedItem("None");
         statusCombo.setSelectedItem(ContractStatus.DRAFT);
         updatePricing();
         table.clearSelection();

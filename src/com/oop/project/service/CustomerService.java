@@ -18,6 +18,16 @@ public class CustomerService {
     public List<Customer> getAllCustomers() {
         return customerRepository.findAll();
     }
+    
+    // Alias for getAllCustomers
+    public List<Customer> findAll() {
+        return getAllCustomers();
+    }
+    
+    // Alias for searchCustomers
+    public List<Customer> search(String keyword) {
+        return searchCustomers(keyword);
+    }
 
     public Optional<Customer> getCustomerById(String customerId) {
         return customerRepository.findById(customerId);
@@ -42,6 +52,29 @@ public class CustomerService {
         }
 
         Customer customer = new Customer(customerId, name, phone, email, address);
+        customerRepository.save(customer);
+    }
+    
+    // Overload to accept Customer object
+    public void updateCustomer(Customer customer) {
+        if (customer == null) {
+            throw new ValidationException("Customer cannot be null");
+        }
+        updateCustomer(customer.getCustomerId(), customer.getName(), customer.getPhone(), 
+                      customer.getEmail(), customer.getAddress());
+    }
+    
+    // Add customer using Customer object
+    public void addCustomer(Customer customer) {
+        if (customer == null) {
+            throw new ValidationException("Customer cannot be null");
+        }
+        validateCustomer(customer.getCustomerId(), customer.getName(), customer.getPhone(), customer.getEmail());
+        
+        if (customerRepository.findById(customer.getCustomerId()).isPresent()) {
+            throw new ValidationException("Customer ID already exists: " + customer.getCustomerId());
+        }
+
         customerRepository.save(customer);
     }
 

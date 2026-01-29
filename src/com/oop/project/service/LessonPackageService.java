@@ -3,6 +3,7 @@ package com.oop.project.service;
 import com.oop.project.exception.ValidationException;
 import com.oop.project.model.LessonPackage;
 import com.oop.project.repository.LessonPackageRepository;
+import com.oop.project.repository.db.DbLessonPackageRepository;
 
 import java.util.List;
 import java.util.Optional;
@@ -13,9 +14,24 @@ public class LessonPackageService {
     public LessonPackageService(LessonPackageRepository lessonPackageRepository) {
         this.lessonPackageRepository = lessonPackageRepository;
     }
+    
+    // Constructor for database mode
+    public LessonPackageService() {
+        this.lessonPackageRepository = new DbLessonPackageRepository();
+    }
 
     public List<LessonPackage> getAllPackages() {
         return lessonPackageRepository.findAll();
+    }
+    
+    // Alias for getAllPackages
+    public List<LessonPackage> getAllLessons() {
+        return getAllPackages();
+    }
+    
+    // Get lesson by ID
+    public LessonPackage getLessonById(String packageId) {
+        return lessonPackageRepository.findById(packageId).orElse(null);
     }
 
     public Optional<LessonPackage> getPackageById(String packageId) {

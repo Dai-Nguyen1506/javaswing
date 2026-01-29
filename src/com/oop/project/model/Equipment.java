@@ -12,9 +12,11 @@ public class Equipment implements Serializable {
     private int quantity;
     private int available;
     private EquipmentCondition condition;
+    private double fee;
 
     public Equipment() {
         this.condition = EquipmentCondition.GOOD;
+        this.fee = 40.0; // Default hourly fee
     }
 
     public Equipment(String equipmentId, String name, String category, int quantity, int available, EquipmentCondition condition) {
@@ -72,6 +74,14 @@ public class Equipment implements Serializable {
 
     public void setCondition(EquipmentCondition condition) {
         this.condition = condition;
+    }
+
+    public double getFee() {
+        return fee;
+    }
+
+    public void setFee(double fee) {
+        this.fee = fee;
     }
 
     @Override

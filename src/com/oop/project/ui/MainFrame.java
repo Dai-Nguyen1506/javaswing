@@ -1,10 +1,14 @@
 package com.oop.project.ui;
 
+import com.oop.project.model.Role;
+import com.oop.project.model.User;
+import com.oop.project.repository.db.DbRentalContractRepository;
 import com.oop.project.service.AuthService;
 import com.oop.project.service.CustomerService;
 import com.oop.project.service.EquipmentService;
 import com.oop.project.service.LessonPackageService;
 import com.oop.project.service.RentalContractService;
+import com.oop.project.service.Session;
 
 import javax.swing.JFrame;
 import javax.swing.JTabbedPane;
@@ -47,11 +51,20 @@ public class MainFrame extends JFrame {
 
     private JTabbedPane buildTabs() {
         JTabbedPane tabs = new JTabbedPane();
+        
+        // Get current user role
+        User currentUser = Session.currentUser().orElse(null);
+        Role userRole = currentUser != null ? currentUser.getRole() : Role.STAFF;
 
-        tabs.addTab("Customers", new CustomerPanel(customerService));
+        // Admin-only: User Management tab
+        if (userRole == Role.ADMIN) {
+            tabs.addTab("User Management", new UserManagementPanel());
+        }
+
+        // Both Admin and Staff can manage customers, equipment, rentals
+        tabs.addTab("Customers", new CustomerPanel(customerService, new DbRentalContractRepository()));
         tabs.addTab("Equipment", new EquipmentPanel(equipmentService));
         tabs.addTab("Rentals", new RentalPanel(rentalContractService));
-        tabs.addTab("Lessons", new LessonPanel(lessonPackageService));
         tabs.addTab("Dashboard", new DashboardPanel(customerService, equipmentService, rentalContractService));
 
         return tabs;
